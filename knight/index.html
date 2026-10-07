@@ -185,6 +185,7 @@ kbd {
     <span><kbd>SHIFT</kbd><kbd>K</kbd> рывок</span>
     <span><kbd>P</kbd> пауза</span>
     <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> выбор карты</span>
+    <span>Лечение: каждый убитый враг +1, красные зелья +20%, большие +50%</span>
   </div>
 
   <section class="panel" aria-labelledby="build-h">
@@ -373,7 +374,7 @@ const SKILLS = [
   { id: 'ice', name: 'Ледяной клинок', icon: 'ice', color: '#7fd8ff', tags: ['Лёд', 'Контроль'], desc: l => `Удар замедляет на ${20 + 10 * l}%.` + (l >= 3 ? ` Шанс ${10 * (l - 2)}% заморозить на 1 с.` : ' С 3 уровня может заморозить.') },
   { id: 'poison', name: 'Ядовитые когти', icon: 'drop', color: '#7bd25a', tags: ['Яд', 'Урон со временем'], desc: l => `Удар добавляет стак яда (максимум ${3 + 2 * l}): ${pct(0.05 + 0.02 * l)} урона меча в секунду за стак.` },
   { id: 'chain', name: 'Цепная молния', icon: 'bolt', color: '#ffe14d', tags: ['Молния'], desc: l => `Шанс ${15 + 10 * l}% при ударе: молния бьёт ${2 + l} врагов по ${pct(0.8)} урона меча.` },
-  { id: 'vamp', name: 'Вампиризм', icon: 'heart', color: '#c03a6b', tags: ['Лечение'], desc: l => `Лечит на ${2 * l}% от урона меча.` },
+  { id: 'vamp', name: 'Вампиризм', icon: 'heart', color: '#c03a6b', tags: ['Лечение'], desc: l => `Лечит на ${3 * l}% от урона меча.` },
   { id: 'armor', name: 'Стальная кираса', icon: 'shield', color: '#c9cfdc', tags: ['Защита'], desc: l => `Броня +${3 * l}: каждый удар по коту слабее на ${3 * l}.` },
   { id: 'nine', name: 'Девять жизней', icon: 'heart', color: '#ff5a7a', tags: ['Защита'], desc: l => `Максимум здоровья +${25 * l}. Сразу лечит на 25.` },
   { id: 'purr', name: 'Мурчание', icon: 'plus', color: '#8dff8a', tags: ['Лечение'], desc: l => `Восстанавливает ${(0.8 * l).toFixed(1)} здоровья в секунду.` },
@@ -632,7 +633,10 @@ function kill(e) {
   const L = G.level;
   const n = Math.min(6, Math.ceil(e.xp / 2));
   for (let i = 0; i < n; i++) gems.push({ x: e.x + rnd(-6, 6), y: e.y + rnd(-6, 6), v: e.xp / n * (1 + (L - 1) * 0.06), t: 0 });
-  if (Math.random() < 0.02) gems.push({ x: e.x, y: e.y, heal: true, t: 0 });
+  // healing: every kill gives a little, potions drop now and then
+  if (G.mode === 'play' || G.mode === 'demo') heal(1);
+  if (e.boss) gems.push({ x: e.x, y: e.y, heal: 'big', t: 0 });
+  else if (Math.random() < (e.elite ? 0.3 : 0.035)) gems.push({ x: e.x + rnd(-4, 4), y: e.y + rnd(-4, 4), heal: Math.random() < 0.2 ? 'big' : 'small', t: 0 });
   if (e.elite && Math.random() < 0.5) gems.push({ x: e.x, y: e.y, chest: true, t: 0 });
   burst(e.x, e.y, e.boss ? '#e9b949' : '#c9cfdc', e.boss ? 30 : 6);
   if (e.type === 'bomber') { rings.push({ x: e.x, y: e.y, r: 4, max: 36, color: '#ff9a3c', t: 16 }); for (const o of foes) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.y - e.y) < 36 + o.r) damage(o, e.dmg, { color: '#ff9a3c' }); }
@@ -696,7 +700,7 @@ function swing(angle, isDouble) {
     if (!e.boss) { const k = 2.4 / Math.max(1, d); e.kx += dx * k; e.ky += dy * k; }
     onHit(e, crit, 1);
   }
-  if (dealtTotal > 0 && lv('vamp')) heal(dealtTotal * 0.02 * lv('vamp') * (syn('bloodlust') && P.hp < st.maxHp / 2 ? 3 : 1));
+  if (dealtTotal > 0 && lv('vamp')) heal(dealtTotal * 0.03 * lv('vamp') * (syn('bloodlust') && P.hp < st.maxHp / 2 ? 3 : 1));
   if (lv('wave') && P.swings % [4, 3, 3, 2, 2][lv('wave') - 1] === 0) {
     const big = syn('moon');
     pshots.push({ kind: 'wave', x: P.x, y: P.y, vx: Math.cos(angle) * 4.5, vy: Math.sin(angle) * 4.5, a: angle, r: big ? 13 : 8, life: 42,
@@ -847,7 +851,7 @@ function step() {
 
 function levelClear() {
   G.phase = 'clear';
-  for (const g of gems) { if (g.heal) heal(20); else if (g.chest) queuePick('chest'); else addXp(g.v); }
+  for (const g of gems) { if (g.heal) drinkPotion(g); else if (g.chest) queuePick('chest'); else addXp(g.v); }
   gems = []; shots = [];
   G.score += 100 * G.level;
   heal(st.maxHp * 0.25);
@@ -1118,6 +1122,15 @@ function addXp(v) {
   while (G.xp >= need) { G.xp -= need; G.plv++; queuePick('level'); need = xpNeed(); }
 }
 function xpNeed() { return Math.floor(8 + G.plv * 6 + G.plv * G.plv * 1.1); }
+function drinkPotion(g) {
+  const amt = Math.round(st.maxHp * (g.heal === 'big' ? 0.5 : 0.2));
+  const before = P.hp;
+  heal(amt);
+  addNum(P.x, P.y - 14, Math.max(1, P.hp - before), '#8dd47a', true);
+  toast((g.heal === 'big' ? 'БОЛЬШОЕ ЗЕЛЬЕ' : 'ЗЕЛЬЕ') + ': +' + amt + ' ЗДОРОВЬЯ', '#8dd47a', 70);
+  rings.push({ x: P.x, y: P.y, r: 4, max: 20, color: '#8dd47a', t: 12 });
+  sfx.potion();
+}
 function gemStep() {
   for (const g of gems) {
     g.t++;
@@ -1125,7 +1138,7 @@ function gemStep() {
     if (d < st.pickup || g.pull) { g.pull = true; g.x += dx / d * 3.5; g.y += dy / d * 3.5; }
     if (d < P.r + 4) {
       g.got = true;
-      if (g.heal) { heal(20); toast('+20 ЗДОРОВЬЯ', '#8dd47a', 70); }
+      if (g.heal) drinkPotion(g);
       else if (g.chest) { toast('СУНДУК! ВЫБЕРИ НАВЫК', '#e9b949', 90); queuePick('chest'); }
       else { addXp(g.v); sfx.gem(); }
     }
@@ -1239,6 +1252,7 @@ const sfx = {
   boom: () => tone(120, 40, 0.3, 'square', 0.08),
   slam: () => tone(90, 30, 0.4, 'square', 0.1),
   gem: () => tone(1300, 1700, 0.04, 'triangle', 0.03, 0, 'gem'),
+  potion: () => arp([660, 880, 1100], 0.05),
   pick: () => arp([523, 784]),
   syn: () => arp([523, 659, 784, 1047, 1319], 0.08),
   clear: () => arp([392, 523, 659, 784], 0.1),
@@ -1374,7 +1388,16 @@ function draw() {
   for (const e of foes) if (e.type === 'bigdog' && e.state === 'aim') { cx.strokeStyle = '#e04f5f'; cx.globalAlpha = 0.5 + 0.4 * Math.sin(G.t * 0.5); cx.beginPath(); cx.arc(e.tx, e.ty, 55, 0, TAU); cx.stroke(); cx.globalAlpha = 1; }
   for (const g of gems) {
     const bob = Math.sin((g.t + g.x) * 0.15) * 1.5;
-    if (g.heal) { cx.fillStyle = '#ffffff'; cx.fillRect(g.x - 2, g.y - 4 + bob, 4, 6); cx.fillStyle = '#8dd47a'; cx.fillRect(g.x - 2, g.y - 1 + bob, 4, 2); }
+    if (g.heal) {
+      // potion flask: big ones are larger and glow
+      const big = g.heal === 'big', x = Math.round(g.x), y = Math.round(g.y + bob), w = big ? 8 : 6, h = big ? 9 : 7;
+      cx.fillStyle = 'rgba(141,212,122,' + (0.15 + 0.1 * Math.sin(G.t * 0.15)) + ')'; cx.beginPath(); cx.arc(x, y, big ? 9 : 6, 0, TAU); cx.fill();
+      cx.fillStyle = '#c9cfdc'; cx.fillRect(x - w / 2 + 1, y - h / 2 - 2, w - 2, 2);
+      cx.fillStyle = '#8b5a2b'; cx.fillRect(x - 1, y - h / 2 - 4, 2, 2);
+      cx.fillStyle = '#e8f0ff'; cx.fillRect(x - w / 2, y - h / 2, w, h);
+      cx.fillStyle = big ? '#ff4d6d' : '#e04f5f'; cx.fillRect(x - w / 2 + 1, y - h / 2 + 2, w - 2, h - 3);
+      cx.fillStyle = '#ffffff'; cx.fillRect(x - w / 2 + 1, y - h / 2 + 2, 1, 2);
+    }
     else if (g.chest) { cx.fillStyle = '#8b5a2b'; cx.fillRect(g.x - 5, g.y - 4 + bob, 10, 7); cx.fillStyle = '#e9b949'; cx.fillRect(g.x - 5, g.y - 2 + bob, 10, 1); cx.fillRect(g.x - 1, g.y - 3 + bob, 2, 3); }
     else { cx.fillStyle = g.v > 2 ? '#ffd84d' : '#5fc8ff'; cx.fillRect(Math.round(g.x - 2), Math.round(g.y - 1 + bob), 4, 3); cx.fillRect(Math.round(g.x + 2), Math.round(g.y - 2 + bob), 1, 1); cx.fillRect(Math.round(g.x + 2), Math.round(g.y + 1 + bob), 1, 1); }
   }
@@ -1681,7 +1704,7 @@ function frame(now) {
 }
 
 // test hook: drive the simulation without rendering
-window.KOTOKLINOK = { G, step, st, startRun, choose, get P() { return P; }, get foes() { return foes; } };
+window.KOTOKLINOK = { G, step, st, startRun, choose, get P() { return P; }, get foes() { return foes; }, get gems() { return gems; } };
 
 startRun('demo');
 requestAnimationFrame(frame);
