@@ -51,12 +51,15 @@ canvas:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .stick .base { width: 110px; height: 110px; border: 2px solid var(--line); background: rgba(233, 185, 73, 0.06); }
 .stick .knob { width: 54px; height: 54px; background: var(--gold); opacity: 0.85; box-shadow: 0 0 0 3px rgba(0,0,0,0.35); }
 .stick.on .tip { visibility: hidden; }
-.btns { display: grid; grid-template-columns: repeat(2, minmax(76px, 1fr)); grid-template-rows: 1.4fr 1fr; gap: 10px; }
+.btns { display: grid; grid-template-columns: repeat(2, minmax(76px, 1fr)); grid-template-rows: 1.3fr 1fr; gap: 10px; }
 .pbtn {
   font-family: var(--pixel); font-size: 11px; color: var(--ink); background: var(--panel);
   border: 3px solid var(--line); border-radius: 16px; padding: 0;
 }
-.pbtn.dash { grid-column: 1 / -1; color: var(--gold); font-size: 14px; }
+.pbtn.dash { color: var(--gold); font-size: 13px; }
+.pbtn.fire { color: #ff9a3c; font-size: 13px; border-color: #7a3a1a; }
+.pbtn.fire .cd { background: #ff9a3c; }
+.pbtn.fire:disabled { opacity: 0.45; }
 .pbtn.on { background: var(--line); border-color: var(--gold); }
 .pbtn .cd { display: block; height: 4px; margin: 8px auto 0; width: 60%; background: var(--gold); border-radius: 2px; transform-origin: left; }
 @media (pointer: coarse) {
@@ -75,7 +78,7 @@ canvas:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   .stick { grid-column: 1; grid-row: 1; }
   .screen { grid-column: 2; grid-row: 1; }
   .btns { grid-column: 3; grid-row: 1; grid-template-columns: 1fr 1fr; }
-  canvas.game { width: auto; height: calc(100dvh - 32px); max-height: calc(100dvh - 32px); }
+  canvas.game { width: auto; height: calc(100dvh - 40px); max-height: calc(100dvh - 40px); }
 }
 .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .btn {
@@ -167,6 +170,7 @@ kbd {
       </div>
       <div class="btns">
         <button class="pbtn dash" id="tDash">РЫВОК<span class="cd" id="dashCd"></span></button>
+        <button class="pbtn fire" id="tFire">ОГОНЬ<span class="cd" id="fireCd"></span></button>
         <button class="pbtn" id="tAtk">УДАР</button>
         <button class="pbtn" id="tPause">ПАУЗА</button>
       </div>
@@ -183,6 +187,7 @@ kbd {
     <span><kbd>WASD</kbd><kbd>←↑↓→</kbd> бег</span>
     <span><kbd>J</kbd><kbd>ПРОБЕЛ</kbd> или мышь: удар (держи)</span>
     <span><kbd>SHIFT</kbd><kbd>K</kbd> рывок</span>
+    <span><kbd>F</kbd> огонь дракона: 10 секунд, раз за уровень</span>
     <span><kbd>P</kbd> пауза</span>
     <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> выбор карты</span>
     <span>Лечение: каждый убитый враг +1, красные зелья +20%, большие +50%</span>
@@ -248,68 +253,93 @@ function flip(src) { const c = mk(src.width, src.height), g = c.getContext('2d')
 function whiten(src) { const c = mk(src.width, src.height), g = c.getContext('2d'); g.drawImage(src, 0, 0); g.globalCompositeOperation = 'source-atop'; g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height); return c; }
 function set(rowsList, pal) { const r = rowsList.map(x => sprite(x, pal)); return { r, l: r.map(flip), w: r.map(whiten), wl: r.map(flip).map(whiten) }; }
 
-// Puss in Boots on horseback: the cat layer is painted over the horse layer
-const CAT_RIDER = [
-  '......FF................',
-  '.....FFF.HHHH...........',
-  '....FF..HHHHHH..........',
-  '...bbbbbbbbbbbbb........',
-  '.......oooooooo.........',
-  '.......oogkoogko........',
-  '.......ooooowpwo........',
-  '........ooowwww.........',
-  '........sssssss.........',
-  '.......osssssssoo.......',
-  '.......eeeeyeeee........',
-  '........sssssss.........',
-  '........rRRr............',
-  '.........RR.............',
-  '.........RR.............',
-  '.........RRR............',
+// Puss in Boots riding a horned dragon: bulky body, short neck, wings in a V over the rider, spiked tail
+const RIDER_UP = [
+  '...WW............................MWW....',
+  '..MWWWW........FF...............WWWM....',
+  '..MmWWWW......FFF.HHHH........WWWWMMM...',
+  '.MmMMWWWWW...FF..HHHHHH.....MWWWMMMMMM..',
+  '.mMMMMmWWWS.bbbbbbbbbbbbb.SWWWWMMMMMM...',
+  'mMMMMmMMWWWW....oooooooo..WWWWWWMMMMM...',
+  'MMMMmMWWWWWWW...oogkoogkoSWWWMSWWWWWW...',
+  'MMMWWWMMWWMWW...ooooowpwoWSMWWSMMMM.....',
+  '.WWMMMMmWMMWWW...ooowwwwWWMSMWSMM.......',
+  '.mMMMMmWMMMmWW...sssssssWWMMSMSS........',
+  '.MMMMmWWMMmMWWW.osssssssooMMMS.S........',
+  '..MMmMWMMmMMMWW.eeeeyeeeeMRMRBdddd......',
+  '...mMWMMmMMMMWWW.sssssssRBBBBBBEkBBBB...',
+  '.....MMmMMMMmMWW.rRRrMWBBBBBBBBBBBBBBBd.',
+  '.......MMMMmMMWWWBRRBBWBBBBBBBBBBBBBBBB.',
+  '..........mMMBBWBBRRBBBBBBBBBBBBBBB.....',
+  '...........BBBBBBBRRRBBBBBBBBB.Bddddddd.',
+  '...........BBBBBBBBBBBBLLLLLLL....T..T..',
+  '..........dBBBBBBBBBBBBBLLLLL...........',
+  '..........dBBBBBBBBBLLLLLBB.............',
+  '..........dBBBBBBBBBLLLLLBBB............',
+  '.........BBBBdBBBBBBLLLLLLBB............',
+  '........BBBBddBBBBBBLLLLLLBBB...........',
+  '......RBBBddddBBBBBdLLLL...BBB..........',
+  '......BBBBBdddBBBBBdLLd....BBB..........',
+  '.......ddd...dBBBB...ddd....B.T.........',
+  '....RBBBd......BBB...ddd...T.T..........',
+  '.....BBB........BBB...dd................',
+  '.....ddd.........BB..ddd................',
+  '....BBB.........BBB..dd.................',
+  '....BBB.........BB...d..................',
+  '...RddB.........B.T..T.T................',
+  '.....BBB....R..T.T......................',
+  '......d..B...RR.........................',
+  '.....R..BBB.BRR.........................',
+  '.........d..R...........................',
 ];
-// a small green dragon; the wing layer flaps over its back, the cat sits on top
-const DRAGON = [
-  '............................',
-  '............................',
-  '............................',
-  '............................',
-  '......................cc....',
-  '.....................nnc....',
-  '....................nnnnn...',
-  '...................nnnxnnnn.',
-  '..................nnnnNNNNN.',
-  '................nnnn........',
-  '..............nnnn..........',
-  '...z.z.z....nnnn............',
-  '..nnnnnnnnnnnnnn............',
-  '.nnnnnnnnnnnnnnnn...........',
-  'nnnvvvvvvvvvvvnnn...........',
-  'n..vvvvvvvvvvvnn............',
-  'nn..nnvvvvvvvnn.............',
-  '.nn..nn....nn...............',
-  '..z..NN....NN...............',
-  '............................',
-  '............................',
+const RIDER_DOWN = [
+  '........................................',
+  '...............FF.......................',
+  '..............FFF.HHHH..................',
+  '.............FF..HHHHHH.................',
+  '............bbbbbbbbbbbbb...............',
+  '................oooooooo................',
+  '................oogkoogkoS....S.........',
+  '................ooooowpwo.S...S.........',
+  '.................ooowwww...SS.S.........',
+  '........S........sssssss...MSWSSWW...S..',
+  '......WWWW......osssssssooWWWSWSWWWWWWW.',
+  'S.WWWWWWWWWW....eeeeyeeeeWRWRBddddWWWW..',
+  'WWWWWWWMWWWWWW...sssssssRBBBBBBEkBBBBM..',
+  'WWWMMWMmWMMWWWWW.rRRr.WBBBBBBBBBBBBBBBd.',
+  'MmMMWMmWWMMmMWWWWBRRBBWBBBBBBBBBBBBBBBB.',
+  'mMMWMmMWMMmMMMBWBBRRBBBBBBBBBBBBBBB.W...',
+  '.MWMmMMWMmMMMBBBBBRRRBBBBBBBBBWBddddddd.',
+  '...mMMMWmMMBBBBBBBBBBBBLLLLLLL.W..T..T..',
+  '.......W..dBBBBBBBBBBBBBLLLLL...........',
+  '..........dBBBBBBBBBLLLLLBB.............',
+  '..........dBBBBBBBBBLLLLLBBB............',
+  '.........BBBBdBBBBBBLLLLLLBB............',
+  '........BBBBddBBBBBBLLLLLLBBB...........',
+  '......RBBBddddBBBBBdLLLL...BBB..........',
+  '......BBBBBdddBBBBBdLLd....BBB..........',
+  '.......ddd...dBBBB...ddd....B.T.........',
+  '....RBBBd......BBB...ddd...T.T..........',
+  '.....BBB........BBB...dd................',
+  '.....ddd.........BB..ddd................',
+  '....BBB.........BBB..dd.................',
+  '....BBB.........BB...d..................',
+  '...RddB.........B.T..T.T................',
+  '.....BBB....R..T.T......................',
+  '......d..B...RR.........................',
+  '.....R..BBB.BRR.........................',
+  '.........d..R...........................',
 ];
-const WING = {
-  up: { 2: '..j.....................', 3: '..jj....................', 4: '..jmj...................', 5: '..jmmj..................', 6: '..jmmmj.................',
-        7: '..jmmmmj................', 8: '..jmmmmmj...............', 9: '...jmmmmmj..............', 10: '....jjjjjjj.............' },
-  mid: { 8: '.jjjjjjj................', 9: 'jmmmmmmmj...............', 10: '.jmmmmmmj...............', 11: '..jjjjjj................' },
-  down: { 10: '....jjjjj...............', 11: '...jmmmmmj..............', 12: '..jmmmmj................', 13: '.jmmmj..................', 14: '.jjj....................' },
-};
 const KNIGHT_PAL = {
   F: '#f4efe0', H: '#3a2418', b: '#2a1a10', o: '#f39237', g: '#c8e65a', k: '#111', w: '#fff1dc', p: '#ff8fb1',
-  s: '#e8d6a8', e: '#5a3a1a', y: '#e9b949', R: '#d0303a', r: '#8a1f28',
-  n: '#3fa34d', N: '#24693a', v: '#e9d27a', c: '#f4efe0', x: '#ffe14d', z: '#e04f5f', j: '#24693a', m: '#8fdc8a',
+  s: '#e8d6a8', e: '#5a3a1a', y: '#e9b949', R: '#c8323a', r: '#8a1f28',
+  B: '#3a3fa0', d: '#23276a', L: '#7a84e0', E: '#ffe14d', T: '#eef0f8', S: '#e0d8e8',
+  W: '#4a1424', M: '#7a2440', m: '#b04060',
 };
-function riderRows(wing) {
-  return DRAGON.map((row, y) => [...row].map((ch, x) => {
-    const c = (CAT_RIDER[y] || '')[x]; if (c && c !== '.') return c;
-    const wc = (wing[y] || '')[x]; if (wc && wc !== '.') return wc;
-    return ch;
-  }).join(''));
-}
-const KNIGHT = set([WING.up, WING.mid, WING.down, WING.mid].map(riderRows), KNIGHT_PAL);
+const KNIGHT = set([RIDER_UP, RIDER_UP, RIDER_DOWN, RIDER_DOWN], KNIGHT_PAL);
+// sprite anchor: the point of the 40x36 sprite that sits on the player position
+const RIDER_AX = 19, RIDER_AY = 26;
+const riderX = (face) => face > 0 ? RIDER_AX : 40 - 1 - RIDER_AX;
 
 const RAT_TOP = ['........pp..', '......gpggg.', '..ggggggkggg', '.ggggggggggp', 'tgggggggggg.'];
 const RAT_ROWS = [RAT_TOP.concat(['t..l...l....', 'tt..........']), RAT_TOP.concat(['t...l...l...', 'tt..........'])];
@@ -516,7 +546,7 @@ function recompute() {
 }
 
 function newPlayer() {
-  return { x: 200, y: 125, r: 8, vx: 0, vy: 0, face: 1, aim: 0, hp: 100, inv: 0, cd: 0, swingT: 0, swingA: 0, swingCrit: false,
+  return { breath: 0, breathA: 0, x: 200, y: 125, r: 8, vx: 0, vy: 0, face: 1, aim: 0, hp: 100, inv: 0, cd: 0, swingT: 0, swingA: 0, swingCrit: false,
     dashT: 0, dashCd: 0, dvx: 0, dvy: 0, dashHit: new Set(), shield: true, shieldT: 0, swings: 0, shadow: 0, anim: 0, doubleT: 0,
     orbA: 0, boomT: 60, meteorT: 120, auraT: 0, moving: false };
 }
@@ -543,6 +573,7 @@ const isBoss = (L) => L % 5 === 0;
 const biomeOf = (L) => Math.floor((L - 1) / 5) % BIOMES.length;
 function startLevel() {
   G.phase = 'fight';
+  G.breathUsed = false; if (P) P.breath = 0;
   G.waves = isBoss(G.level) ? 3 : 4;
   const lay = LAYOUTS[(G.level - 1) % LAYOUTS.length]; G.pillars = lay.obs; G.arena = lay.name;
   P.x = 200; P.y = G.pillars.some(p => Math.hypot(p.x - 200, p.y - 125) < p.r + 10) ? 200 : 125;
@@ -718,6 +749,32 @@ function swing(angle, isDouble) {
   if (!isDouble && Math.random() < st.double) P.doubleT = 7;
   sfx.swing(any, crit);
 }
+// dragon fire: a 10 second cone of flame, once per level
+const BREATH_TIME = 600, BREATH_RANGE = 95, BREATH_HALF = 0.42;
+function breathMouth() { return { x: P.x + 20 * P.face, y: P.y - 11 }; }
+function breathStep() {
+  P.breath--;
+  const t = nearestFoe(P.x, P.y, BREATH_RANGE + 30);
+  const want = t ? Math.atan2(t.y - (P.y - 8), t.x - P.x) : (P.face > 0 ? 0 : Math.PI);
+  let d = want - P.breathA; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+  P.breathA += d * 0.15;
+  if (Math.cos(P.breathA) > 0.15) P.face = 1; else if (Math.cos(P.breathA) < -0.15) P.face = -1;
+  const m = breathMouth();
+  for (let i = 0; i < 4; i++) {
+    const a = P.breathA + rnd(-BREATH_HALF, BREATH_HALF) * 0.8, sp = rnd(2.5, 4.5);
+    fx.push({ x: m.x, y: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: rnd(14, 24), color: pick(['#ffe14d', '#ff9a3c', '#ff6a2a', '#e04f5f']), flame: true });
+  }
+  if (P.breath % 6 === 0) {
+    for (const e of foes) {
+      if (e.dead) continue;
+      const dx = e.x - m.x, dy = e.y - m.y, dist = Math.hypot(dx, dy);
+      if (dist > BREATH_RANGE + e.r || angDiff(Math.atan2(dy, dx), P.breathA) > BREATH_HALF + e.r / Math.max(dist, 1)) continue;
+      damage(e, st.dmg * 0.45, { color: '#ff9a3c', num: P.breath % 18 === 0 });
+      if (!e.dead) { e.burn = Math.max(e.burn, 120); e.burnD = Math.max(e.burnD, st.dmg * 0.3); }
+    }
+    sfx.flame();
+  }
+}
 function heal(n) { if (n > 0 && P.hp < st.maxHp) { P.hp = Math.min(st.maxHp, P.hp + n); } }
 function hurt(raw, src) {
   if (P.inv > 0 || P.dashT > 0 || G.phase !== 'fight') return;
@@ -772,7 +829,10 @@ function densestFoe() {
 // ---------- input ----------
 const keys = {};
 const mouse = { x: 0, y: 0, down: false, active: false };
-const touch = { id: null, ox: 0, oy: 0, dx: 0, dy: 0, atk: false, dash: false };
+const touch = { id: null, ox: 0, oy: 0, dx: 0, dy: 0, atk: false, dash: false, breath: false };
+// quick taps on phone buttons are latched until the next frame reads them
+const taps = {};
+const takeTap = (k) => { const v = taps[k]; taps[k] = false; return !!v; };
 const stick = { id: null, ox: 0, oy: 0, x: 0, y: 0, mag: 0 };
 function humanInput() {
   let mx = 0, my = 0;
@@ -783,10 +843,11 @@ function humanInput() {
   if (touch.id != null) { const d = Math.hypot(touch.dx, touch.dy); if (d > 6) { mx = touch.dx / d; my = touch.dy / d; } }
   if (stick.id != null && stick.mag > 0.15) { mx = stick.x; my = stick.y; }
   const atk = keys.KeyJ || keys.Space || mouse.down || touch.atk || G.auto;
-  const dash = keys.ShiftLeft || keys.ShiftRight || keys.KeyK || touch.dash;
+  const dash = keys.ShiftLeft || keys.ShiftRight || keys.KeyK || touch.dash || takeTap('dash');
+  const breath = keys.KeyF || keys.KeyL || touch.breath || takeTap('breath');
   let aim = null;
   if (mouse.active && !G.auto && mouse.down) aim = Math.atan2(mouse.y - P.y, mouse.x - P.x);
-  return { mx, my, atk, dash, aim };
+  return { mx, my, atk, dash, aim, breath };
 }
 function aiInput() {
   let fx = 0, fy = 0;
@@ -824,7 +885,8 @@ function aiInput() {
   for (const p of G.pillars) { const dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy) || 1; if (d < p.r + 14) { fx += dx / d * 1.2 - dy / d * 0.8; fy += dy / d * 1.2 + dx / d * 0.8; } }
   const d = Math.hypot(fx, fy);
   const close = foes.some(e => !e.dead && Math.hypot(e.x - P.x, e.y - P.y) < e.r + 12);
-  return { mx: d > 0.15 ? fx / d : 0, my: d > 0.15 ? fy / d : 0, atk: true, dash: close && P.dashCd <= 0 && P.hp < st.maxHp * 0.7, aim: null };
+  return { mx: d > 0.15 ? fx / d : 0, my: d > 0.15 ? fy / d : 0, atk: true, dash: close && P.dashCd <= 0 && P.hp < st.maxHp * 0.7, aim: null,
+    breath: foes.filter(e => !e.dead).length >= 10 || foes.some(e => e.boss && !e.dead && Math.hypot(e.x - P.x, e.y - P.y) < 90) };
 }
 
 // ---------- update ----------
@@ -913,6 +975,11 @@ function playerStep(inp) {
     if (syn('shadow')) P.shadow = 2;
     sfx.dash();
   }
+  if (inp.breath && !G.breathUsed && P.breath <= 0) {
+    G.breathUsed = true; P.breath = BREATH_TIME;
+    toast('ДРАКОНИЙ ОГОНЬ!', '#ff9a3c', 120); sfx.breath(); G.shake = 6;
+  }
+  if (P.breath > 0) breathStep();
   if (P.doubleT > 0 && --P.doubleT === 0) swing(P.swingA, true);
   if (inp.atk && P.cd <= 0) {
     let a = inp.aim;
@@ -1256,6 +1323,8 @@ const sfx = {
   kill: () => tone(400, 120, 0.08, 'square', 0.04, 0, 'kill'),
   hurt: () => tone(300, 80, 0.25, 'sawtooth', 0.08),
   dash: () => tone(200, 900, 0.1, 'triangle', 0.06),
+  breath: () => { tone(120, 60, 0.6, 'sawtooth', 0.09); tone(300, 90, 0.5, 'square', 0.05, 0.05); },
+  flame: () => tone(rnd(140, 220), 70, 0.12, 'sawtooth', 0.025, 0, 'flame'),
   block: () => tone(1200, 1500, 0.1, 'triangle', 0.08),
   zap: () => tone(1500, 300, 0.08, 'sawtooth', 0.04, 0, 'zap'),
   boom: () => tone(120, 40, 0.3, 'square', 0.08),
@@ -1338,21 +1407,21 @@ function drawFoe(e) {
 function drawKnight() {
   if (G.phase === 'dead') return;
   const blink = P.inv > 0 && Math.floor(P.inv / 3) % 2;
-  const frame = Math.floor(G.t / (P.moving ? 4 : 7)) % 4;
+  const frame = Math.floor(G.t / (P.moving ? 5 : 8)) % 4;
   const img = P.face > 0 ? KNIGHT.r[frame] : KNIGHT.l[frame];
   const bob = Math.round(Math.sin(G.t * 0.12) * 1.5);
-  const x = Math.round(P.x - 12), y = Math.round(P.y - 18) + bob;
-  cx.fillStyle = 'rgba(0,0,0,0.28)'; cx.beginPath(); cx.ellipse(P.x, P.y + 6, 9 - bob * 0.5, 2.5, 0, 0, TAU); cx.fill();
+  const x = Math.round(P.x - riderX(P.face)), y = Math.round(P.y - RIDER_AY) + bob;
+  cx.fillStyle = 'rgba(40,30,120,0.35)'; cx.beginPath(); cx.ellipse(P.x, P.y + 9, 13 - bob * 0.5, 3, 0, 0, TAU); cx.fill();
   if (!blink) cx.drawImage(img, x, y);
   // rapier in the cat's paw
-  const hx = P.x + 1 * P.face, hy = P.y - 10 + bob;
+  const hx = P.x + 6 * P.face, hy = P.y - 16 + bob;
   const a = P.swingT > 0 ? P.swingA + (P.swingT - 5) * 0.22 * (Math.cos(P.swingA) >= 0 ? 1 : -1) : (P.face > 0 ? -0.7 : Math.PI + 0.7);
   const sl = 12 + st.range * 0.3;
   cx.strokeStyle = '#e8ecf5'; cx.lineWidth = 1;
   cx.beginPath(); cx.moveTo(hx + Math.cos(a) * 2, hy + Math.sin(a) * 2); cx.lineTo(hx + Math.cos(a) * sl, hy + Math.sin(a) * sl); cx.stroke();
   cx.fillStyle = '#e9b949'; cx.fillRect(Math.round(hx + Math.cos(a) * 2) - 1, Math.round(hy + Math.sin(a) * 2) - 1, 2, 2);
   cx.lineWidth = 1;
-  if (lv('yarnshield') && P.shield) { cx.strokeStyle = 'rgba(255,143,208,0.55)'; cx.beginPath(); cx.arc(P.x, P.y - 7, 16, 0, TAU); cx.stroke(); }
+  if (lv('yarnshield') && P.shield) { cx.strokeStyle = 'rgba(255,143,208,0.55)'; cx.beginPath(); cx.arc(P.x, P.y - 9, 23, 0, TAU); cx.stroke(); }
 }
 
 function draw() {
@@ -1455,8 +1524,10 @@ function draw() {
   }
   for (const r of rings) { cx.strokeStyle = r.color; cx.globalAlpha = r.t / 16; cx.lineWidth = 2; cx.beginPath(); cx.arc(r.x, r.y, r.r, 0, TAU); cx.stroke(); cx.lineWidth = 1; cx.globalAlpha = 1; }
   for (const p of fx) {
-    if (p.ghost) { cx.globalAlpha = p.t / 24; cx.drawImage(p.ghost > 0 ? KNIGHT.w[0] : KNIGHT.wl[0], Math.round(p.x - 12), Math.round(p.y - 18)); cx.globalAlpha = 1; continue; }
-    cx.fillStyle = p.color; cx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+    if (p.ghost) { cx.globalAlpha = p.t / 24; cx.drawImage(p.ghost > 0 ? KNIGHT.w[0] : KNIGHT.wl[0], Math.round(p.x - riderX(p.ghost)), Math.round(p.y - RIDER_AY)); cx.globalAlpha = 1; continue; }
+    cx.fillStyle = p.color;
+    if (p.flame) { const sz = p.t > 14 ? 2 : 3; cx.globalAlpha = Math.min(1, p.t / 10); cx.fillRect(Math.round(p.x), Math.round(p.y), sz, sz); cx.globalAlpha = 1; }
+    else cx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
   }
   for (const n of nums) {
     cx.globalAlpha = Math.min(1, n.t / 15);
@@ -1494,6 +1565,8 @@ function drawHud() {
   const dk = 1 - P.dashCd / st.dashCd;
   bar(8, 229, 30, 2, dk, dk >= 1 ? '#efe6d2' : '#6a6f7c');
   text('РЫВОК', 42, 227, 5, dk >= 1 ? '#efe6d2' : '#6a6f7c');
+  if (P.breath > 0) { bar(80, 229, 40, 2, P.breath / BREATH_TIME, '#ff9a3c'); text('ОГОНЬ', 124, 227, 5, '#ff9a3c'); }
+  else text(G.breathUsed ? 'ОГОНЬ: НА СЛЕД. УРОВНЕ' : 'ОГОНЬ ГОТОВ [F]', 80, 227, 5, G.breathUsed ? '#6a6f7c' : (G.t % 40 < 20 ? '#ff9a3c' : '#ffe14d'));
   const boss = foes.find(e => e.boss && !e.dead);
   if (boss) {
     const name = { ratking: 'КРЫСИНЫЙ КОРОЛЬ', bigdog: 'ПЁС-ВЕЛИКАН', owl: 'СОВА-КОЛДУНЬЯ' }[boss.type];
@@ -1660,11 +1733,11 @@ cv.addEventListener('pointercancel', endPtr);
 cv.addEventListener('contextmenu', (e) => e.preventDefault());
 function bindHold(id, k) {
   const el = $(id);
-  el.addEventListener('pointerdown', (e) => { e.preventDefault(); audio(); if (G.mode === 'demo') { begin(); return; } touch[k] = true; el.classList.add('on'); });
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); audio(); if (G.mode === 'demo') { begin(); return; } touch[k] = true; taps[k] = true; el.classList.add('on'); });
   const off = () => { touch[k] = false; el.classList.remove('on'); };
   el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
 }
-bindHold('tAtk', 'atk'); bindHold('tDash', 'dash');
+bindHold('tAtk', 'atk'); bindHold('tDash', 'dash'); bindHold('tFire', 'breath');
 $('tAtk').addEventListener('dblclick', (e) => e.preventDefault());
 $('tPause').addEventListener('pointerdown', (e) => { e.preventDefault(); if (G.mode === 'demo') { audio(); begin(); return; } setPause(!G.paused); });
 
@@ -1704,12 +1777,13 @@ document.addEventListener('contextmenu', (e) => { if (e.target.closest('.pad')) 
 
 // ---------- loop ----------
 let last = performance.now(), acc = 0;
-const dashCdEl = $('dashCd');
+const dashCdEl = $('dashCd'), fireCdEl = $('fireCd'), fireBtn = $('tFire');
 function frame(now) {
   acc += Math.min(100, now - last); last = now;
   while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; }
   draw();
   if (P) dashCdEl.style.transform = 'scaleX(' + (1 - P.dashCd / st.dashCd).toFixed(2) + ')';
+  if (P) { fireCdEl.style.transform = 'scaleX(' + (P.breath > 0 ? P.breath / BREATH_TIME : G.breathUsed ? 0 : 1).toFixed(2) + ')'; fireBtn.disabled = G.breathUsed && P.breath <= 0 && G.mode === 'play'; }
   requestAnimationFrame(frame);
 }
 
