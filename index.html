@@ -116,6 +116,7 @@ kbd {
 
   <div class="bar">
     <button class="btn" id="startBtn">Играть</button>
+    <button class="btn ghost" id="freshBtn" hidden>С начала</button>
     <button class="btn ghost" id="demoBtn">Демо</button>
     <button class="btn ghost" id="muteBtn">Звук: вкл</button>
   </div>
@@ -127,6 +128,7 @@ kbd {
     <span><kbd>P</kbd> пауза</span>
     <span><kbd>M</kbd> звук</span>
     <span><kbd>D</kbd> демо</span>
+    <span><kbd>N</kbd> новая игра с 1-1</span>
   </div>
 
   <section class="panel" aria-labelledby="wardrobe-h">
@@ -446,6 +448,8 @@ function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 G.hi = +load('kotoprig-hi', 0) || 0;
 G.bank = +load('kotoprig-bank', 0) || 0;
 G.costume = load('kotoprig-costume', 'ginger');
+G.saved = Math.max(1, +load('kotoprig-level', 1) || 1);
+function worldStart(n) { return Math.floor((n - 1) / 3) * 3 + 1; }
 if (!COSTUMES.some(c => c.id === G.costume && c.cost <= G.bank)) G.costume = 'ginger';
 
 let P;
@@ -460,9 +464,14 @@ function startLevel() {
   if (G.checkpoint && L.check) L.items.shift();
   G.phase = 'run'; G.timer = 0; G.parts = []; G.pops = []; G.cam = Math.max(0, sx - W * 0.38);
   ai.hold = false; ai.bestX = P.x; ai.stuck = 0;
+  if (G.mode === 'play' && worldStart(G.level) > G.saved) {
+    G.saved = worldStart(G.level); save('kotoprig-level', G.saved);
+    if (G.level > 1) message('ПРОГРЕСС СОХРАНЁН: МИР ' + levelLabel(G.saved), '#8dff6a');
+    updateButtons();
+  }
 }
-function newGame(mode) {
-  G.mode = mode; G.level = 1; G.lives = 3; G.score = 0; G.fish = 0; G.paused = false; G.demoDeaths = 0;
+function newGame(mode, from = 1) {
+  G.mode = mode; G.level = from; G.lives = 3; G.score = 0; G.fish = 0; G.paused = false; G.demoDeaths = 0;
   G.checkpoint = false; G.msgs = [];
   startLevel();
   updateButtons();
@@ -1111,8 +1120,8 @@ function draw() {
   if (G.mode === 'demo') {
     cx.fillStyle = 'rgba(13,9,32,0.55)'; cx.fillRect(0, 62, W, 72);
     text('КОТОПРЫГ', W / 2, 70, 24, '#ff9f43', 'center');
-    if (Math.floor(G.t / 30) % 2) text('НАЖМИ ЛЮБУЮ КЛАВИШУ', W / 2, 104, 8, '#ffffff', 'center');
-    text('ИЛИ ТАПНИ ПО ЭКРАНУ', W / 2, 118, 8, '#a898c4', 'center');
+    if (Math.floor(G.t / 30) % 2) text(G.saved > 1 ? 'НАЖМИ, ЧТОБЫ ПРОДОЛЖИТЬ С ' + levelLabel(G.saved) : 'НАЖМИ ЛЮБУЮ КЛАВИШУ', W / 2, 104, 8, '#ffffff', 'center');
+    text(G.saved > 1 ? 'N — НОВАЯ ИГРА С 1-1' : 'ИЛИ ТАПНИ ПО ЭКРАНУ', W / 2, 118, 8, '#a898c4', 'center');
     text('ДЕМО', W - 8, 22, 8, Math.floor(G.t / 20) % 2 ? '#ff6b9a' : '#ffffff', 'right');
   }
   if (G.phase === 'run' && P.x < 6 * T && G.mode === 'play' && !G.checkpoint) text('МИР ' + levelLabel(G.level) + ' · ' + wd.name, W / 2, 140, 8, '#ffffff', 'center');
@@ -1122,7 +1131,7 @@ function draw() {
     text('ИГРА ОКОНЧЕНА', W / 2, 74, 16, '#ff6b9a', 'center');
     text('СЧЁТ ' + G.score + '   РЕКОРД ' + G.hi, W / 2, 102, 8, '#ffffff', 'center');
     text('В КОПИЛКЕ ' + G.bank + ' ОЧКОВ', W / 2, 118, 8, '#ffd36b', 'center');
-    if (Math.floor(G.t / 30) % 2) text('НАЖМИ, ЧТОБЫ СЫГРАТЬ ЕЩЁ', W / 2, 140, 8, '#ffffff', 'center');
+    if (Math.floor(G.t / 30) % 2) text(G.saved > 1 ? 'НАЖМИ, ЧТОБЫ ПРОДОЛЖИТЬ С ' + levelLabel(G.saved) : 'НАЖМИ, ЧТОБЫ СЫГРАТЬ ЕЩЁ', W / 2, 140, 8, '#ffffff', 'center');
   }
   if (G.paused) {
     cx.fillStyle = 'rgba(13,9,32,0.6)'; cx.fillRect(0, 0, W, H);
@@ -1141,13 +1150,15 @@ function frame(now) {
 
 // ---------- page UI ----------
 const startBtn = document.getElementById('startBtn');
+const freshBtn = document.getElementById('freshBtn');
 const demoBtn = document.getElementById('demoBtn');
 const muteBtn = document.getElementById('muteBtn');
 function updateButtons() {
-  startBtn.textContent = G.mode === 'play' ? 'Заново' : 'Играть';
+  startBtn.textContent = G.saved > 1 ? 'Продолжить с ' + levelLabel(G.saved) : G.mode === 'play' ? 'Заново' : 'Играть';
+  freshBtn.hidden = G.saved <= 1;
   muteBtn.textContent = muted ? 'Звук: выкл' : 'Звук: вкл';
 }
-function begin() { audio(); newGame('play'); cv.focus(); }
+function begin(fresh) { audio(); newGame('play', fresh === true ? 1 : G.saved); cv.focus(); }
 
 const cardsEl = document.getElementById('cards');
 const cardEls = {};
@@ -1206,6 +1217,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyP' && G.mode === 'play') { G.paused = !G.paused; return; }
   if (e.code === 'KeyM') { toggleMute(); return; }
   if (e.code === 'KeyC') { cycleCostume(); return; }
+  if (e.code === 'KeyN' && (G.mode === 'demo' || G.phase === 'over')) { begin(true); return; }
   if (G.mode === 'demo' || G.phase === 'over') { begin(); return; }
   keys[e.code] = true;
 });
@@ -1220,7 +1232,8 @@ cv.addEventListener('pointerdown', () => {
   if (G.mode === 'demo' || G.phase === 'over') begin();
   else if (G.paused) G.paused = false;
 });
-startBtn.addEventListener('click', begin);
+startBtn.addEventListener('click', () => begin());
+freshBtn.addEventListener('click', () => begin(true));
 demoBtn.addEventListener('click', () => { persist(); newGame('demo'); });
 function toggleMute() {
   muted = !muted;
