@@ -39,16 +39,44 @@ canvas.game {
   background: #000; border-radius: 4px; touch-action: none; cursor: crosshair;
 }
 canvas:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
-.touch { display: none; justify-content: flex-end; gap: 12px; user-select: none; -webkit-user-select: none; }
-.touch button {
-  font-family: var(--pixel); font-size: 11px; color: var(--ink);
-  background: var(--panel); border: 3px solid var(--line); border-radius: 14px;
-  min-width: 96px; height: 60px; touch-action: none;
+.stage { display: grid; gap: 10px; }
+.pad { display: none; }
+.stick, .pbtn { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
+.stick {
+  position: relative; overflow: hidden; border-radius: 16px;
+  background: var(--panel); border: 2px dashed var(--line);
+  display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding-inline: 12px;
 }
-.touch button.atk { color: var(--gold); }
-.touch button.on { background: var(--line); }
-.touch .hint { margin-right: auto; align-self: center; color: var(--muted); font-size: 13px; }
-@media (pointer: coarse) { .touch { display: flex; } }
+.stick .base, .stick .knob { position: absolute; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); }
+.stick .base { width: 110px; height: 110px; border: 2px solid var(--line); background: rgba(233, 185, 73, 0.06); }
+.stick .knob { width: 54px; height: 54px; background: var(--gold); opacity: 0.85; box-shadow: 0 0 0 3px rgba(0,0,0,0.35); }
+.stick.on .tip { visibility: hidden; }
+.btns { display: grid; grid-template-columns: repeat(2, minmax(76px, 1fr)); grid-template-rows: 1.4fr 1fr; gap: 10px; }
+.pbtn {
+  font-family: var(--pixel); font-size: 11px; color: var(--ink); background: var(--panel);
+  border: 3px solid var(--line); border-radius: 16px; padding: 0;
+}
+.pbtn.dash { grid-column: 1 / -1; color: var(--gold); font-size: 14px; }
+.pbtn.on { background: var(--line); border-color: var(--gold); }
+.pbtn .cd { display: block; height: 4px; margin: 8px auto 0; width: 60%; background: var(--gold); border-radius: 2px; transform-origin: left; }
+@media (pointer: coarse) {
+  body { padding-block: 8px; overscroll-behavior: none; }
+  header p, .help { display: none; }
+  .wrap { gap: 10px; }
+  .screen { padding: 4px; border-width: 2px; }
+  .pad { display: grid; grid-template-columns: 1.3fr 1fr; gap: 10px; height: clamp(170px, 36vh, 260px); }
+  .bar .btn { padding: 12px 14px; }
+}
+@media (pointer: coarse) and (orientation: landscape) {
+  body { padding-block: 6px; }
+  header { display: none; }
+  .stage { grid-template-columns: minmax(130px, 1fr) auto minmax(130px, 1fr); align-items: stretch; }
+  .pad { display: contents; }
+  .stick { grid-column: 1; grid-row: 1; }
+  .screen { grid-column: 2; grid-row: 1; }
+  .btns { grid-column: 3; grid-row: 1; grid-template-columns: 1fr 1fr; }
+  canvas.game { width: auto; height: calc(100dvh - 32px); max-height: calc(100dvh - 32px); }
+}
 .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .btn {
   font-family: var(--pixel); font-size: 10px; color: var(--bg); background: var(--gold);
@@ -89,7 +117,6 @@ kbd {
 .sheet h2 { font-size: clamp(12px, 3vw, 16px); text-align: center; }
 .sheet .sub { text-align: center; color: var(--muted); margin: 0; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
 .card {
   display: grid; grid-template-columns: auto 1fr; align-content: start; gap: 6px 12px; text-align: left;
   font: inherit; color: var(--ink); background: var(--panel); border: 2px solid var(--line); border-radius: 10px;
@@ -105,6 +132,15 @@ kbd {
 .card .synb { grid-column: 1 / -1; font-size: 13px; color: var(--bg); background: var(--gold); border-radius: 6px; padding: 6px 8px; font-weight: 600; }
 .card .synh { grid-column: 1 / -1; font-size: 13px; color: var(--gold); }
 .card .key { position: absolute; top: 10px; right: 10px; }
+@media (max-width: 640px) {
+  .cards { grid-template-columns: 1fr; gap: 8px; }
+  .card { padding: 10px 12px; gap: 2px 10px; }
+  .card canvas { width: 36px; height: 36px; }
+  .card h3 { font-size: 16px; }
+  .card p { font-size: 14px; margin-top: 2px; }
+  .card .tags, .card .key { display: none; }
+  .sheet { gap: 10px; }
+}
 .sheet .row { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
 .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; text-align: center; }
@@ -120,14 +156,21 @@ kbd {
     <p>Кот в сапогах на коне против крысиного войска. Собери сильную связку навыков.</p>
   </header>
 
-  <div class="screen">
-    <canvas id="game" class="game" width="400" height="240" tabindex="0" aria-label="Арена"></canvas>
-  </div>
-
-  <div class="touch">
-    <span class="hint">Веди пальцем по арене, чтобы бежать</span>
-    <button id="tDash">РЫВОК</button>
-    <button id="tAtk" class="atk">УДАР</button>
+  <div class="stage">
+    <div class="screen">
+      <canvas id="game" class="game" width="400" height="240" tabindex="0" aria-label="Арена"></canvas>
+    </div>
+    <div class="pad">
+      <div class="stick" id="stick" aria-label="Джойстик">
+        <span class="tip">Палец сюда и веди: кот поскачет в ту сторону</span>
+        <span class="base" hidden></span><span class="knob" hidden></span>
+      </div>
+      <div class="btns">
+        <button class="pbtn dash" id="tDash">РЫВОК<span class="cd" id="dashCd"></span></button>
+        <button class="pbtn" id="tAtk">УДАР</button>
+        <button class="pbtn" id="tPause">ПАУЗА</button>
+      </div>
+    </div>
   </div>
 
   <div class="bar">
@@ -673,6 +716,7 @@ function hurt(raw, src) {
   }
   const amt = Math.max(1, raw - st.armor);
   P.hp -= amt; P.inv = 36; G.shake = Math.max(G.shake, 6);
+  if (G.mode === 'play' && navigator.vibrate) { try { navigator.vibrate(25); } catch (err) {} }
   addNum(P.x, P.y - 10, amt, '#ff5a6a', false);
   sfx.hurt();
   if (lv('thorns') && src && !src.dead) damage(src, amt * 0.4 * lv('thorns') + st.dmg * 0.3 * lv('thorns'), { color: '#c8b48a' });
@@ -716,6 +760,7 @@ function densestFoe() {
 const keys = {};
 const mouse = { x: 0, y: 0, down: false, active: false };
 const touch = { id: null, ox: 0, oy: 0, dx: 0, dy: 0, atk: false, dash: false };
+const stick = { id: null, ox: 0, oy: 0, x: 0, y: 0, mag: 0 };
 function humanInput() {
   let mx = 0, my = 0;
   if (keys.KeyA || keys.ArrowLeft) mx -= 1;
@@ -723,6 +768,7 @@ function humanInput() {
   if (keys.KeyW || keys.ArrowUp) my -= 1;
   if (keys.KeyS || keys.ArrowDown) my += 1;
   if (touch.id != null) { const d = Math.hypot(touch.dx, touch.dy); if (d > 6) { mx = touch.dx / d; my = touch.dy / d; } }
+  if (stick.id != null && stick.mag > 0.15) { mx = stick.x; my = stick.y; }
   const atk = keys.KeyJ || keys.Space || mouse.down || touch.atk || G.auto;
   const dash = keys.ShiftLeft || keys.ShiftRight || keys.KeyK || touch.dash;
   let aim = null;
@@ -1443,7 +1489,9 @@ function drawHud() {
 const $ = (id) => document.getElementById(id);
 function hide(id) { $(id).hidden = true; }
 function hideModals() { ['pickModal', 'overModal', 'pauseModal'].forEach(hide); }
+let pickShownAt = 0;
 function showPick() {
+  pickShownAt = performance.now();
   $('pickTitle').textContent = pickTitle(G.pickKind);
   $('pickSub').textContent = G.pickKind === 'start'
     ? 'Один навык на старт. Дальше новые будут выпадать за опыт, сундуки и пройденные уровни.'
@@ -1469,7 +1517,8 @@ function showPick() {
         if (pr.length) { const d = document.createElement('div'); d.className = 'synh'; d.textContent = 'Связка с: ' + pr.map(x => x.name).join(', '); b.append(d); }
       }
     }
-    b.addEventListener('click', () => choose(i));
+    // ignore the tap that opened the window, so it can't pick a card by accident
+    b.addEventListener('click', () => { if (performance.now() - pickShownAt > 450) choose(i); });
     box.append(b);
   });
   $('rerollBtn').hidden = G.pickKind === 'start';
@@ -1521,6 +1570,7 @@ function setPause(on) {
 function updateButtons() {
   $('startBtn').textContent = G.mode === 'play' ? 'Новый забег' : 'В бой';
   $('autoBtn').textContent = 'Автоатака: ' + (G.auto ? 'вкл' : 'выкл');
+  $('tAtk').textContent = G.auto ? 'АВТО' : 'УДАР';
   $('muteBtn').textContent = 'Звук: ' + (muted ? 'выкл' : 'вкл');
 }
 function begin() { audio(); startRun('play'); cv.focus(); }
@@ -1582,13 +1632,51 @@ function bindHold(id, k) {
   el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
 }
 bindHold('tAtk', 'atk'); bindHold('tDash', 'dash');
+$('tAtk').addEventListener('dblclick', (e) => e.preventDefault());
+$('tPause').addEventListener('pointerdown', (e) => { e.preventDefault(); if (G.mode === 'demo') { audio(); begin(); return; } setPause(!G.paused); });
+
+// floating joystick: it appears wherever the thumb lands inside the zone
+const stickEl = $('stick'), baseEl = stickEl.querySelector('.base'), knobEl = stickEl.querySelector('.knob');
+const STICK_R = 44;
+function stickMove(e) {
+  const r = stickEl.getBoundingClientRect();
+  let dx = e.clientX - r.left - stick.ox, dy = e.clientY - r.top - stick.oy;
+  const d = Math.hypot(dx, dy);
+  if (d > STICK_R) { stick.ox += dx - dx / d * STICK_R; stick.oy += dy - dy / d * STICK_R; dx = dx / d * STICK_R; dy = dy / d * STICK_R; }
+  stick.mag = Math.min(1, d / STICK_R);
+  stick.y = d ? dy / Math.max(1, Math.hypot(dx, dy)) : 0;
+  stick.x = d ? dx / Math.max(1, Math.hypot(dx, dy)) : 0;
+  baseEl.style.left = stick.ox + 'px'; baseEl.style.top = stick.oy + 'px';
+  knobEl.style.left = (stick.ox + dx) + 'px'; knobEl.style.top = (stick.oy + dy) + 'px';
+}
+stickEl.addEventListener('pointerdown', (e) => {
+  e.preventDefault(); audio();
+  if (G.mode === 'demo') { begin(); return; }
+  if (stick.id != null) return;
+  const r = stickEl.getBoundingClientRect();
+  stick.id = e.pointerId; stick.ox = e.clientX - r.left; stick.oy = e.clientY - r.top; stick.mag = 0; stick.x = stick.y = 0;
+  stickEl.setPointerCapture(e.pointerId);
+  baseEl.hidden = knobEl.hidden = false; stickEl.classList.add('on');
+  stickMove(e);
+});
+stickEl.addEventListener('pointermove', (e) => { if (e.pointerId === stick.id) stickMove(e); });
+const stickEnd = (e) => {
+  if (e.pointerId !== stick.id) return;
+  stick.id = null; stick.mag = 0; stick.x = stick.y = 0;
+  baseEl.hidden = knobEl.hidden = true; stickEl.classList.remove('on');
+};
+stickEl.addEventListener('pointerup', stickEnd);
+stickEl.addEventListener('pointercancel', stickEnd);
+document.addEventListener('contextmenu', (e) => { if (e.target.closest('.pad')) e.preventDefault(); });
 
 // ---------- loop ----------
 let last = performance.now(), acc = 0;
+const dashCdEl = $('dashCd');
 function frame(now) {
   acc += Math.min(100, now - last); last = now;
   while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; }
   draw();
+  if (P) dashCdEl.style.transform = 'scaleX(' + (1 - P.dashCd / st.dashCd).toFixed(2) + ')';
   requestAnimationFrame(frame);
 }
 
